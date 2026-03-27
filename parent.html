@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SafeNest — Remote Control & Gesture Panel</title>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#f5f5f3;color:#1a1a1a;padding:1.5rem;}
+:root{
+  --color-background-primary:#ffffff;
+  --color-background-secondary:#f1efe8;
+  --color-background-tertiary:#f5f5f3;
+  --color-text-primary:#1a1a1a;
+  --color-text-secondary:#6b6b68;
+  --color-text-tertiary:#9a9a96;
+  --color-border-tertiary:rgba(0,0,0,0.10);
+  --color-border-secondary:rgba(0,0,0,0.18);
+  --border-radius-md:8px;
+  --border-radius-lg:12px;
+}
+@media(prefers-color-scheme:dark){
+  body{background:#1a1a1a;color:#f0ede8;}
+  :root{
+    --color-background-primary:#242420;
+    --color-background-secondary:#2e2e2a;
+    --color-background-tertiary:#1a1a1a;
+    --color-text-primary:#f0ede8;
+    --color-text-secondary:#9a9a96;
+    --color-text-tertiary:#6b6b68;
+    --color-border-tertiary:rgba(255,255,255,0.10);
+    --color-border-secondary:rgba(255,255,255,0.18);
+  }
+}
+/* All your professional UI styles remain exactly as they were */
+.rc-app{display:flex;gap:1.5rem;flex-wrap:wrap;}
+.rc-left{display:flex;flex-direction:column;gap:1rem;flex:1;min-width:260px;}
+.rc-right{display:flex;flex-direction:column;gap:1rem;width:220px;min-width:200px;}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;}
+.card-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:1rem;}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:var(--border-radius-md);font-weight:500;}
+.badge-ok{background:#E1F5EE;color:#085041;}
+.badge-danger{background:#FCEBEB;color:#791F1F;}
+.badge-warn{background:#FAEEDA;color:#633806;}
+.badge-info{background:#E6F1FB;color:#0C447C;}
+.phone-frame{background:#1a1a1a;border-radius:28px;padding:8px;width:160px;margin:0 auto;border:2px solid #333;}
+.phone-notch{width:50px;height:10px;background:#1a1a1a;border-radius:0 0 8px 8px;margin:0 auto 4px;}
+.phone-screen{background:#111;border-radius:20px;overflow:hidden;aspect-ratio:9/16;position:relative;cursor:crosshair;}
+.screen-content{width:100%;height:100%;position:relative;}
+.screen-topbar{background:#222;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;}
+.screen-topbar span{color:#aaa;font-size:9px;}
+.screen-app-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px;}
+.app-icon{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;color:white;font-weight:500;}
+.screen-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:20px;}
+.lock-overlay{background:rgba(0,0,0,0.85);}
+.lock-circle{width:48px;height:48px;border-radius:50%;background:#333;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;}
+.alert-overlay{background:rgba(226,75,74,0.92);}
+.alert-msg-screen{color:white;text-align:center;padding:16px;}
+.gesture-zone{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:1.25rem;position:relative;min-height:180px;border:0.5px solid var(--color-border-tertiary);touch-action:none;cursor:grab;user-select:none;}
+.quick-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.qbtn{padding:10px 8px;border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.qbtn-lock{border-color:#F7C1C1;color:#791F1F;}
+.qbtn-lock:hover{background:#FCEBEB;}
+.qbtn-unlock{border-color:#9FE1CB;color:#085041;}
+.qbtn-unlock:hover{background:#E1F5EE;}
+.child-tabs{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;}
+.child-tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;border:0.5px solid var(--color-border-secondary);cursor:pointer;font-size:12px;color:var(--color-text-secondary);background:transparent;}
+.child-tab.active{border-color:#1D9E75;background:#E1F5EE;color:#085041;font-weight:500;}
+.avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;}
+.av-teal{background:#9FE1CB;color:#085041;}
+.status-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:13px;}
+.status-label{color:var(--color-text-secondary);}
+.gesture-list{display:flex;flex-direction:column;gap:8px;}
+.gesture-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);}
+.gesture-sym{width:32px;height:32px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.gesture-sym-swipe{background:#E1F5EE;}
+.toast{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);padding:6px 14px;font-size:12px;color:var(--color-text-primary);white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 0.3s;z-index:10;}
+.toast.show{opacity:1;}
+.mirror-status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--color-text-secondary);margin-bottom:10px;}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#1D9E75;animation:blink 1.4s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+textarea{font-family:system-ui,sans-serif;}
+button{font-family:system-ui,sans-serif;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<div class="rc-app" id="rcapp">
+  <div class="rc-left">
+    <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;">
+        <div class="card" style="padding-bottom:1.5rem;">
+          <div class="card-title">Live screen mirror</div>
+          <div class="child-tabs">
+            <div class="child-tab active" onclick="switchChild(0,this)"><div class="avatar av-teal">EM</div>Emma</div>
+            <div class="child-tab"><div class="avatar av-purple">LK</div>Liam</div>
+            <div class="child-tab"><div class="avatar av-amber">SO</div>Sofia</div>
+          </div>
+          <div class="mirror-status">
+            <div class="live-dot"></div>
+            <span id="mirror-label">Live · Emma's iPad</span>
+          </div>
+          <div class="phone-frame">
+            <div class="phone-notch"></div>
+            <div class="phone-screen" id="phone-screen" onclick="handleScreenTap(event)">
+              <div class="screen-content" id="screen-content">
+                <div class="screen-topbar">
+                  <span id="screen-time-top">9:41</span>
+                  <span>Emma</span>
+                  <span id="screen-batt-top">100%</span>
+                </div>
+                <div class="screen-app-grid" id="app-grid">
+                  <div class="app-icon" style="background:#1D9E75;">Kh</div>
+                  <div class="app-icon" style="background:#378ADD;">Yt</div>
+                  <div class="app-icon" style="background:#EF9F27;">Sc</div>
+                  <div class="app-icon" style="background:#7F77DD;">Du</div>
+                </div>
+              </div>
+              <div class="screen-overlay lock-overlay" id="lock-overlay" style="display:none;border-radius:20px;">
+                <div style="text-align:center;">
+                  <div class="lock-circle">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="4" y="9" width="12" height="9" rx="2" fill="#aaa"/><path d="M7 9V6a3 3 0 0 1 6 0v3" stroke="#aaa" stroke-width="1.5"/></svg>
+                  </div>
+                  <div style="color:#aaa;font-size:10px;">Device locked</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="badge badge-ok" id="device-status">Online</span>
+            <span class="badge badge-info" id="app-badge">Khan Academy</span>
+            <span class="badge badge-warn" id="time-badge">1h 52m used</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:1rem;">
+        <div class="card" style="position:relative;">
+          <div class="toast" id="toast"></div>
+          <div class="card-title">Gesture control pad</div>
+          <div class="gesture-zone" id="gesture-zone"
+            onmousedown="startGesture(event)" onmousemove="moveGesture(event)" onmouseup="endGesture(event)">
+            <div id="gesture-canvas" style="width:100%;height:120px;position:relative;"></div>
+            <div class="gesture-label" id="gesture-label" style="text-align:center;">Try a gesture</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Quick actions</div>
+          <div class="quick-btns">
+            <button class="qbtn qbtn-lock" onclick="lockDevice()">Lock now</button>
+            <button class="qbtn qbtn-unlock" onclick="unlockDevice()">Unlock</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rc-right">
+    <div class="card">
+      <div class="card-title">Device status</div>
+      <div class="status-row"><span class="status-label">Connection</span><span class="badge badge-ok">Online</span></div>
+      <div class="status-row"><span class="status-label">Battery</span><span id="status-battery">84%</span></div>
+      <div class="status-row"><span class="status-label">Lock state</span><span class="badge" id="lock-badge" style="background:#E1F5EE;color:#085041;">Unlocked</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- SOCKET CONNECTION LOGIC ---
+const socket = io("http://localhost:3000"); 
+
+socket.on("connect", () => {
+    console.log("Dashboard connected!");
+    socket.emit('identify', { type: 'parent' });
+});
+
+// --- UI LOGIC ---
+var isLocked=false, gesturing=false, startX=0, trails=[];
+
+function lockDevice(){
+  isLocked=true;
+  socket.emit('parent-command', { action: 'lock' }); // SEND TO SERVER
+  document.getElementById('lock-overlay').style.display='flex';
+  var b=document.getElementById('lock-badge');
+  b.textContent='Locked';b.style.background='#FCEBEB';b.style.color='#791F1F';
+  showToast('Lock command sent');
+}
+
+function unlockDevice(){
+  isLocked=false;
+  socket.emit('parent-command', { action: 'unlock' }); // SEND TO SERVER
+  document.getElementById('lock-overlay').style.display='none';
+  var b=document.getElementById('lock-badge');
+  b.textContent='Unlocked';b.style.background='#E1F5EE';b.style.color='#085041';
+  showToast('Unlock command sent');
+}
+
+function showToast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),1800);
+}
+
+// GESTURE RECOGNITION
+function startGesture(e){gesturing=true;startX=e.offsetX;}
+function endGesture(e){
+  if(!gesturing) return; gesturing=false;
+  var dx=e.offsetX-startX;
+  if(dx > 50) { recognizeGesture('swipe-right'); } // Unlock
+  else if(dx < -50) { recognizeGesture('swipe-left'); } // Lock
+}
+function moveGesture(e){ if(gesturing) addTrail(e.offsetX,e.offsetY); }
+
+function recognizeGesture(type){
+  if(type==='swipe-right') unlockDevice();
+  if(type==='swipe-left') lockDevice();
+}
+
+function addTrail(x,y){
+  var dot=document.createElement('div');
+  dot.style.cssText=`position:absolute;width:6px;height:6px;border-radius:50%;background:#1D9E75;left:${x}px;top:${y}px;opacity:0.6;pointer-events:none;`;
+  document.getElementById('gesture-canvas').appendChild(dot);
+  setTimeout(()=>dot.remove(),300);
+}
+</script>
+</body>
+</html>
