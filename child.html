@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SafeNest Child Node</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .status { font-size: 20px; color: #1D9E75; }
+        .lock-screen { display: none; position: fixed; inset: 0; background: black; z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
+    </style>
+</head>
+<body>
+    <h1>SafeNest Protected</h1>
+    <div id="status" class="status">Connecting to Parent...</div>
+
+    <div id="lock-overlay" class="lock-screen">
+        <h2 style="color: red;">DEVICE LOCKED</h2>
+        <p>Time's up! Talk to your parent.</p>
+    </div>
+
+    <script>
+        // REPLACE WITH YOUR LAPTOP IP
+        const socket = io("http://192.168.1.7:3000"); 
+
+        socket.emit('identify', { name: "Emma", type: "child" });
+
+        socket.on('child-action', (data) => {
+            const overlay = document.getElementById('lock-overlay');
+            if (data.action === 'lock') {
+                overlay.style.display = 'flex'; // Shows the black "Locked" screen
+                document.getElementById('status').innerText = "Locked by Parent";
+            } else if (data.action === 'unlock') {
+                overlay.style.display = 'none'; // Hides it
+                document.getElementById('status').innerText = "SafeNest Protected";
+            }
+        });
+    </script>
+</body>
+</html>
